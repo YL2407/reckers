@@ -4,7 +4,8 @@ from util import *
 import torch.nn.functional as F
 import random
 from mcts import mcts, StateNode
-
+import multiprocessing
+import time
 
 GAMES_TO_SIM = 50
 BATCH_SIZE = 32
@@ -12,7 +13,7 @@ MAX_TRAIN_ITERS = 1000
 BUFFER_SIZE = 500000 #TODO decide on this
 TRAIN_LOOP_ITERS = 4000
 
-model = ResNet().to(DEVICE)
+model = ResNet() #.to(DEVICE)
 
 replay_buffer = [] #TODO probably convert batches to tensors when retrieving
 
@@ -40,6 +41,11 @@ def self_play_game():
   final_outcome = state.returns()[0]
   for game_state in game_state_array:
     replay_buffer.append((game_state, final_outcome))
+
+def populate_replay_buffer():
+  model.eval()
+  for game in range(GAMES_TO_SIM//6):
+    self_play_game()
 
 def training_loop():
   #TODO save weights from time to time, print iteration
@@ -80,7 +86,19 @@ def training_loop():
 
 
 if __name__ == "__main__":
-  self_play_game()
+  t1 = time.time()
+  p = []
+  num_processes = 6
+  for i in range(num_processes):
+    p.append(multiprocessing.Process(target = populate_replay_buffer))
+  for process in p:
+    process.start()
+  for process in p:
+    process.join()
+  t2 = time.time()
+  print(f"6 games take {(t2 - t1)/60} minutes")
+
+
   # training_loop()
 # print(str(state))
 #   action = ...#random.choice(state.legal_actions(state.current_player()))

@@ -28,7 +28,7 @@ def puct(root, c=2.0):
 def mcts(model: ResNet, root: StateNode, sims=50):
   #TODO batch leaf node computations somehow
   assert not root.state.is_terminal(), "no running MCTS from a terminal state"
-  model = model.to('cpu')
+  #model = model.to('cpu') #TODO definitely move to the GPU if batching ... (in that case, move the data too)
   # t1 = time.time()
   (actions_raw, value) = model(board_to_input(root.board, root.turn))
   # t2 = time.time()
