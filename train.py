@@ -13,25 +13,26 @@ MAX_TRAIN_ITERS = 1000
 BUFFER_SIZE = 500000 #TODO decide on this
 TRAIN_LOOP_ITERS = 4000
 
-model = ResNet() #.to(DEVICE)
-
-replay_buffer = [] #TODO probably convert batches to tensors when retrieving
-
-game = pyspiel.load_game("checkers")
 
 # class BufferItem():
 #   def __init__(self, ):
-    
+replay_buffer = [] #TODO probably convert batches to tensors when retrieving    
 
 def select_mcts_action(root):
-  return torch.argmax(root.visit_counts).item()
-def self_play_game():
+  counts = root.visit_counts.flatten()
+  probs = counts / counts.sum()
+  chosen_idx = torch.multinomial(probs, 1).item()
+  return chosen_idx
+def self_play_game(game, model):
   game_state_array = []
   state = game.new_initial_state()
   while not state.is_terminal():
     root = StateNode(state)
     with torch.no_grad():
+      t1 = time.time()
       root = mcts(model, root)
+      t2 = time.time()
+      print(f"{64/(t2 - t1)} sims per second")
     game_state_array.append(encode_node(root))
     #TODO add this to replay buffer (probably)
     chosen_idx = select_mcts_action(root)
@@ -42,23 +43,40 @@ def self_play_game():
   for game_state in game_state_array:
     replay_buffer.append((game_state, final_outcome))
 
-def populate_replay_buffer():
-  model.eval()
-  for game in range(GAMES_TO_SIM//6):
-    self_play_game()
+def populate_replay_buffer(game, model):
+  for iter in range(GAMES_TO_SIM//6):
+    self_play_game(game, model)
 
 def training_loop():
+  model = ResNet().to(DEVICE)
+  game = pyspiel.load_game("checkers")
   #TODO save weights from time to time, print iteration
   optim = torch.optim.AdamW(model.parameters())
   loss_fn_val = torch.nn.MSELoss()
   loss_fn_pol = torch.nn.CrossEntropyLoss()
   for train_loop_iter in range(TRAIN_LOOP_ITERS):
     print(f"train loop iteration: {train_loop_iter}")
+    # model = model.to('cpu')
     model.eval()
-    for game in range(GAMES_TO_SIM):
-      self_play_game()
+    for iter in range(GAMES_TO_SIM):
+      self_play_game(game, model)
+    # p = []
+    # num_processes = 6
+    # communication_queue = multiprocessing.Queue(maxsize=10000)
+    # #TODO start multiprocessing pool!
+    # for i in range(num_processes):
+    #   process = multiprocessing.Process(target = populate_replay_buffer, args = (communication_queue, game, model))
+    #   p.append(process)
+    #   process.start()
+    # for process in p:
+    #   process.join()
+    # while not communication_queue.empty():
+    #     replay_buffer.append(communication_queue.get())
+    # for game in range(GAMES_TO_SIM):
+    #   self_play_game()
     if len(replay_buffer) > BUFFER_SIZE:
       del replay_buffer[:-int(BUFFER_SIZE/2)]
+    # model = model.to(DEVICE)
     model.train()
     for batch in range(MAX_TRAIN_ITERS):
       #sample batch
@@ -76,7 +94,7 @@ def training_loop():
       (loss_pol + loss_val).backward()
       optim.step()
       optim.zero_grad()
-    if train_loop_iter % 100 == 0:
+    if (train_loop_iter+1) % 100 == 0:
       print("saving weights...")
       torch.save({
         "model": model.state_dict(),
@@ -86,18 +104,7 @@ def training_loop():
 
 
 if __name__ == "__main__":
-  t1 = time.time()
-  p = []
-  num_processes = 6
-  for i in range(num_processes):
-    p.append(multiprocessing.Process(target = populate_replay_buffer))
-  for process in p:
-    process.start()
-  for process in p:
-    process.join()
-  t2 = time.time()
-  print(f"6 games take {(t2 - t1)/60} minutes")
-
+  training_loop()
 
   # training_loop()
 # print(str(state))
