@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -70,7 +71,6 @@ class ResNet(nn.Module):
     ])
     self.policy_head = PolicyHead()
     self.value_head = ValueHead()
-    
   def forward(self, x):
     x = self.conv1(x)
     x = self.bn1(x)

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import random
 from mcts import mcts, StateNode
 
+
 GAMES_TO_SIM = 50
 BATCH_SIZE = 32
 MAX_TRAIN_ITERS = 1000
@@ -23,7 +24,6 @@ game = pyspiel.load_game("checkers")
 
 def select_mcts_action(root):
   return torch.argmax(root.visit_counts).item()
-
 def self_play_game():
   game_state_array = []
   state = game.new_initial_state()
@@ -40,7 +40,6 @@ def self_play_game():
   final_outcome = state.returns()[0]
   for game_state in game_state_array:
     replay_buffer.append((game_state, final_outcome))
-
 
 def training_loop():
   #TODO save weights from time to time, print iteration
@@ -81,7 +80,8 @@ def training_loop():
 
 
 if __name__ == "__main__":
-  training_loop()
+  self_play_game()
+  # training_loop()
 # print(str(state))
 #   action = ...#random.choice(state.legal_actions(state.current_player()))
 #   print(state.action_to_string(action))

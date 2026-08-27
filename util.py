@@ -36,7 +36,7 @@ def board_to_input(board, turn):
   if turn == 1:
     res[4] = torch.ones(INPUT_SHAPE[1:])
   res = res.unsqueeze(0)
-  res = res.to(DEVICE)
+  # res = res.to(DEVICE)
   return res
 def output_to_tuple(output):
   direction = output // (INPUT_SHAPE[1]*INPUT_SHAPE[2])
@@ -80,11 +80,11 @@ def encode_node(root):
 def decode_node(encoded):
   return (board_to_input(encoded[0], encoded[1]), encoded[2].to(DEVICE))
 
-def mask_and_softmax(actions_raw, state):
+def mask_and_softmax(actions_raw, state, legal_actions):
   assert len(actions_raw.shape) == 2, "expected shape (batch_dim, prod(MOVE_DIM))"
   #TODO handle 0 legal move case?
   actions_raw = actions_raw.reshape((-1, *MOVE_SHAPE))
-  legal_moves = [state.action_to_string(legal_action) for legal_action in state.legal_actions(state.current_player())] #TODO ah, legal actions different per batch
+  legal_moves = [state.action_to_string(legal_action) for legal_action in legal_actions]
   tupled_moves = [
     (
       ord(move[0]) - ord("a"),
