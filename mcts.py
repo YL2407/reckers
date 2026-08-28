@@ -36,6 +36,44 @@ def puct(root, c=2.0):
 #   return batched_mcts(root)
 
 
+def sequential_mcts(model: ResNet, root: StateNode, sims=64):
+  #TODO batch leaf node computations somehow
+  assert not root.state.is_terminal(), "no running MCTS from a terminal state"
+  (actions_raw, value) = model(board_to_input(root.board, root.turn))
+  value = value.item()
+  action_probs = mask_and_softmax(actions_raw, root.state, root.state.legal_actions()).cpu()
+  root.value_estimate = value
+  root.probs = action_probs[0]
+  for sim in range(sims):
+    history = []
+    curr = root
+    chosen_idx = puct(curr)
+    history.append((curr, chosen_idx))
+    while curr.children.get(chosen_idx) != None:
+      curr.visit_counts[output_to_tuple(chosen_idx)]+=1
+      curr = curr.children[chosen_idx]
+      if curr.state.is_terminal():
+        value = curr.state.returns()[0]
+        break
+      chosen_idx = puct(curr)
+      history.append((curr, chosen_idx))
+    if not curr.state.is_terminal():
+      curr.visit_counts[output_to_tuple(chosen_idx)]+=1
+      curr.children[chosen_idx] = StateNode(curr.state.child(curr.state.string_to_action(output_to_move(curr.board, chosen_idx))))
+      if curr.children[chosen_idx].state.is_terminal():
+        value = curr.children[chosen_idx].state.returns()[0]
+      else:
+        (actions_raw, value) = model(board_to_input(curr.children[chosen_idx].board, curr.children[chosen_idx].turn))
+        value = value.item()
+        action_probs = mask_and_softmax(actions_raw, curr.children[chosen_idx].state, curr.children[chosen_idx].state.legal_actions()).cpu()
+        curr.children[chosen_idx].probs = action_probs[0]
+      curr.children[chosen_idx].value_estimate = value
+    #backprop
+    while len(history) > 0:
+      (parent, action_idx) = history.pop()
+      parent.qs[output_to_tuple(action_idx)] = parent.qs[output_to_tuple(action_idx)] + (value - parent.qs[output_to_tuple(action_idx)])/parent.visit_counts[output_to_tuple(action_idx)] #online average update
+  return root
+
 #TODO multithreading
 def mcts(model: ResNet, root: StateNode, sims=64):
   assert not root.state.is_terminal(), "no running MCTS from a terminal state"

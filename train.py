@@ -18,6 +18,9 @@ TRAIN_LOOP_ITERS = 4000
 #   def __init__(self, ):
 replay_buffer = [] #TODO probably convert batches to tensors when retrieving    
 
+def det_select_mcts_action(root):
+  return torch.argmax(root.visit_counts).item()
+
 def select_mcts_action(root):
   counts = root.visit_counts.flatten()
   probs = counts / counts.sum()
@@ -29,10 +32,10 @@ def self_play_game(game, model):
   while not state.is_terminal():
     root = StateNode(state)
     with torch.no_grad():
-      t1 = time.time()
+      # t1 = time.time()
       root = mcts(model, root)
-      t2 = time.time()
-      print(f"{64/(t2 - t1)} sims per second")
+      # t2 = time.time()
+      # print(f"{64/(t2 - t1)} sims per second")
     game_state_array.append(encode_node(root))
     #TODO add this to replay buffer (probably)
     chosen_idx = select_mcts_action(root)
@@ -59,6 +62,7 @@ def training_loop():
     # model = model.to('cpu')
     model.eval()
     for iter in range(GAMES_TO_SIM):
+      print(f"game {iter+1} started")
       self_play_game(game, model)
     # p = []
     # num_processes = 6
@@ -78,6 +82,7 @@ def training_loop():
       del replay_buffer[:-int(BUFFER_SIZE/2)]
     # model = model.to(DEVICE)
     model.train()
+    print("starting weight update")
     for batch in range(MAX_TRAIN_ITERS):
       #sample batch
       raw_batch = random.sample(replay_buffer, BATCH_SIZE)
@@ -94,13 +99,13 @@ def training_loop():
       (loss_pol + loss_val).backward()
       optim.step()
       optim.zero_grad()
-    if (train_loop_iter+1) % 100 == 0:
+    if (train_loop_iter+1) % 20 == 0:
       print("saving weights...")
       torch.save({
         "model": model.state_dict(),
         "optimizer": optim.state_dict(),
         "iteration": train_loop_iter,
-      }, "weights/checkpoint.pth")
+      }, f"weights/checkpoint_{train_loop_iter+1}.pth")
 
 
 if __name__ == "__main__":
