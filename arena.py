@@ -41,11 +41,10 @@ if __name__ == "__main__":
       with torch.no_grad():
         if state.current_player() % 2 == game_iter % 2:
           root = sequential_mcts(model1, root)
-          chosen_idx = det_select_mcts_action(root)
+          # chosen_idx = det_select_mcts_action(root)
         else:
           root = sequential_mcts(model2, root)
-          chosen_idx = tuned_select_mcts_action(root)
-      # chosen_idx = select_mcts_action(root)
+      chosen_idx = select_mcts_action(root)
       action = state.string_to_action(output_to_move(root.board, chosen_idx))
       state.apply_action(action)
     final_outcome = state.returns()[0]

@@ -50,7 +50,7 @@ def self_play_game(game, model):
     #TODO add this to replay buffer (probably)
     chosen_idx = select_mcts_action(root)
     action = state.string_to_action(output_to_move(root.board, chosen_idx))
-    state.apply_action(action)
+    state = state.child(action)
   #TODO probably add final state as well so we see returns and all?
   final_outcome = state.returns()[0]
   for game_state in game_state_array:

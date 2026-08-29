@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from resnet import INPUT_SHAPE, MOVE_SHAPE
+import numpy as np
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -20,24 +21,35 @@ def clean_string_board(board):
 '''
 assuming board is represented in the form of str(state) from openspiel
 '''
-def board_to_input(board, turn):
-  board = clean_string_board(board)
-  res = torch.zeros(INPUT_SHAPE)
-  for row in range(8):
-    for col in range(8):
-      if board[row][col] == 'o':
-        res[0][row][col] = 1
-      elif board[row][col] == '8':
-        res[1][row][col] = 1
-      elif board[row][col] == '+':
-        res[2][row][col] = 1
-      elif board[row][col] == '*':
-        res[3][row][col] = 1
-  if turn == 1:
-    res[4] = torch.ones(INPUT_SHAPE[1:])
-  res = res.unsqueeze(0)
-  # res = res.to(DEVICE)
-  return res
+def board_to_input(state):
+  # board = clean_string_board(board)
+  # res = torch.zeros(INPUT_SHAPE)
+  # for row in range(8):
+  #   for col in range(8):
+  #     if board[row][col] == 'o':
+  #       res[0][row][col] = 1
+  #     elif board[row][col] == '8':
+  #       res[1][row][col] = 1
+  #     elif board[row][col] == '+':
+  #       res[2][row][col] = 1
+  #     elif board[row][col] == '*':
+  #       res[3][row][col] = 1
+  # if turn == 1:
+  #   res[4] = torch.ones(INPUT_SHAPE[1:])
+  # res = res.unsqueeze(0)
+  # # res = res.to(DEVICE)
+  # return res
+  obs = torch.from_numpy(
+      np.asarray(state.observation_tensor(0), dtype=np.float32)
+  ).reshape(5, 8, 8)
+
+  turn_plane = torch.full(
+      (1, 8, 8),
+      float(state.current_player())
+  )
+
+  return torch.cat((obs, turn_plane), dim=0).unsqueeze(0)
+
 def output_to_tuple(output):
   direction = output // (INPUT_SHAPE[1]*INPUT_SHAPE[2])
   rem1 = output % (INPUT_SHAPE[1]*INPUT_SHAPE[2])
@@ -70,41 +82,79 @@ def output_to_move(board, output):
       dest_diff = 2
     return col_chr+row_chr+str(chr(col+ord('a')-dest_diff))+str(row+dest_diff + 1)
 
+# def encode_node(root):
+#   #we need the board state and empirical visit probabilities decodable
+#   board = root.board
+#   turn = root.turn
+#   visit_probs = (root.visit_counts / (torch.sum(root.visit_counts))).detach().cpu()
+#   return (board, turn, visit_probs)
+
 def encode_node(root):
-  #we need the board state and empirical visit probabilities decodable
-  board = root.board
-  turn = root.turn
+  state = root.state
   visit_probs = (root.visit_counts / (torch.sum(root.visit_counts))).detach().cpu()
-  return (board, turn, visit_probs)
+  return (state, visit_probs)
 
 def decode_node(encoded):
-  return (board_to_input(encoded[0], encoded[1]), encoded[2].to(DEVICE))
+  return (board_to_input(encoded[0]), encoded[1].to(DEVICE))
 
-def mask_and_softmax(actions_raw, state, legal_actions):
-  assert len(actions_raw.shape) == 2, "expected shape (batch_dim, prod(MOVE_DIM))"
-  #TODO handle 0 legal move case?
+# def decode_node(encoded):
+#   return (board_to_input(encoded[0], encoded[1]), encoded[2].to(DEVICE))
+
+# def mask_and_softmax(actions_raw, state, legal_actions):
+#   assert len(actions_raw.shape) == 2, "expected shape (batch_dim, prod(MOVE_DIM))"
+#   #TODO handle 0 legal move case?
+#   actions_raw = actions_raw.reshape((-1, *MOVE_SHAPE))
+#   legal_moves = [state.action_to_string(legal_action) for legal_action in legal_actions]
+#   tupled_moves = [
+#     (
+#       ord(move[0]) - ord("a"),
+#       int(move[1])-1,
+#       ord(move[2]) - ord("a"),
+#       int(move[3])-1
+#     )
+#     for move in legal_moves
+#   ]
+#   mapped_moves = [
+#     (0, move[1], move[0]) if move[2] > move[0] and move[3] > move[1]
+#     else (1, move[1], move[0]) if move[2] > move[0] and move[3] < move[1]
+#     else (2, move[1], move[0]) if move[2] < move[0] and move[3] < move[1]
+#     else (3, move[1], move[0])
+#     for move in tupled_moves
+#   ] 
+#   directions, rows, cols = zip(*mapped_moves)
+#   res = torch.full_like(actions_raw, float('-inf'))
+#   res[:, directions, rows, cols] = actions_raw[:, directions, rows, cols]
+#   res = F.softmax(res.flatten(start_dim=1), dim=1).reshape_as(res) #TODO ensure there is a batch dimension
+#   return res
+def mask_and_softmax(actions_raw, legal_actions):
+  assert actions_raw.ndim == 2, \
+    "expected shape (batch_dim, prod(MOVE_SHAPE))"
+
   actions_raw = actions_raw.reshape((-1, *MOVE_SHAPE))
-  legal_moves = [state.action_to_string(legal_action) for legal_action in legal_actions]
-  tupled_moves = [
-    (
-      ord(move[0]) - ord("a"),
-      int(move[1])-1,
-      ord(move[2]) - ord("a"),
-      int(move[3])-1
-    )
-    for move in legal_moves
-  ]
-  mapped_moves = [
-    (0, move[1], move[0]) if move[2] > move[0] and move[3] > move[1]
-    else (1, move[1], move[0]) if move[2] > move[0] and move[3] < move[1]
-    else (2, move[1], move[0]) if move[2] < move[0] and move[3] < move[1]
-    else (3, move[1], move[0])
-    for move in tupled_moves
-  ] 
-  directions, rows, cols = zip(*mapped_moves)
+
+  legal_indices = []
+
+  for action in legal_actions:
+    a = action
+    a //= 2
+    os_direction = a % 4
+    a //= 4
+    internal_col = a % 8
+    internal_row = a // 8
+
+    direction = (os_direction - 1) % 4
+    row = 7 - internal_row
+    col = internal_col
+
+    legal_indices.append(direction * 64 + row * 8 + col)
+
   res = torch.full_like(actions_raw, float('-inf'))
-  res[:, directions, rows, cols] = actions_raw[:, directions, rows, cols]
-  res = F.softmax(res.flatten(start_dim=1), dim=1).reshape_as(res) #TODO ensure there is a batch dimension
-  return res
+  indices = torch.tensor(legal_indices, device=actions_raw.device)
+  res.flatten(start_dim=1)[:, indices] = \
+    actions_raw.flatten(start_dim=1)[:, indices]
+
+  return F.softmax(
+    res.flatten(start_dim=1), dim=1
+  ).reshape_as(res)
 
 

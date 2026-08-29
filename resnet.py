@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-INPUT_SHAPE = (5, 8, 8) #checkers board: w pawns, w kings, b pawns, b kings, turn
+INPUT_SHAPE = (6, 8, 8) #checkers board: w pawns, w kings, b pawns, b kings, turn
 BLOCK_CHANNELS = 64
 KERNEL_SIZE = 3
 POLICY_CHANNELS = 2

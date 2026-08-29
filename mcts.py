@@ -14,7 +14,8 @@ class StateNode():
     if state.is_terminal():
       self.probs = torch.zeros(MOVE_SHAPE)
     else:
-      self.probs = mask_and_softmax(torch.ones(math.prod(MOVE_SHAPE)).unsqueeze(0), state, state.legal_actions())#initialise these to the probabilities given by model
+      # self.probs = mask_and_softmax(torch.ones(math.prod(MOVE_SHAPE)).unsqueeze(0), state, state.legal_actions())#initialise these to the probabilities given by model
+        self.probs = mask_and_softmax(torch.ones(math.prod(MOVE_SHAPE)).unsqueeze(0), state.legal_actions())#initialise these to the probabilities given by model
     self.qs = torch.zeros(MOVE_SHAPE)
     self.value_estimate = 0 #network's estimate of this state's value
     #self.parent = None
@@ -39,9 +40,11 @@ def puct(root, c=2.0):
 def sequential_mcts(model: ResNet, root: StateNode, sims=64):
   #TODO batch leaf node computations somehow
   assert not root.state.is_terminal(), "no running MCTS from a terminal state"
-  (actions_raw, value) = model(board_to_input(root.board, root.turn))
+  # (actions_raw, value) = model(board_to_input(root.board, root.turn))
+  (actions_raw, value) = model(board_to_input(root.state))
   value = value.item()
-  action_probs = mask_and_softmax(actions_raw, root.state, root.state.legal_actions()).cpu()
+  # action_probs = mask_and_softmax(actions_raw, root.state, root.state.legal_actions()).cpu()
+  action_probs = mask_and_softmax(actions_raw, root.state.legal_actions()).cpu()
   root.value_estimate = value
   root.probs = action_probs[0]
   for sim in range(sims):
@@ -63,9 +66,11 @@ def sequential_mcts(model: ResNet, root: StateNode, sims=64):
       if curr.children[chosen_idx].state.is_terminal():
         value = curr.children[chosen_idx].state.returns()[0]
       else:
-        (actions_raw, value) = model(board_to_input(curr.children[chosen_idx].board, curr.children[chosen_idx].turn))
+        # (actions_raw, value) = model(board_to_input(curr.children[chosen_idx].board, curr.children[chosen_idx].turn))
+        (actions_raw, value) = model(board_to_input(curr.children[chosen_idx].state))
         value = value.item()
-        action_probs = mask_and_softmax(actions_raw, curr.children[chosen_idx].state, curr.children[chosen_idx].state.legal_actions()).cpu()
+        # action_probs = mask_and_softmax(actions_raw, curr.children[chosen_idx].state, curr.children[chosen_idx].state.legal_actions()).cpu()
+        action_probs = mask_and_softmax(actions_raw, curr.children[chosen_idx].state.legal_actions()).cpu()
         curr.children[chosen_idx].probs = action_probs[0]
       curr.children[chosen_idx].value_estimate = value
     #backprop
@@ -79,11 +84,13 @@ def mcts(model: ResNet, root: StateNode, sims=64):
   assert not root.state.is_terminal(), "no running MCTS from a terminal state"
   #model = model.to('cpu') #TODO definitely move to the GPU if batching ... (in that case, move the data too)
   # t1 = time.time()
-  (actions_raw, value) = model(board_to_input(root.board, root.turn).to(DEVICE))
+  # (actions_raw, value) = model(board_to_input(root.board, root.turn).to(DEVICE))
+  (actions_raw, value) = model(board_to_input(root.state).to(DEVICE))
   # t2 = time.time()
   # print(f"time for initial model eval: {t2-t1}")
   value = value.item()
-  action_probs = mask_and_softmax(actions_raw, root.state, root.state.legal_actions()).cpu()
+  # action_probs = mask_and_softmax(actions_raw, root.state, root.state.legal_actions()).cpu()
+  action_probs = mask_and_softmax(actions_raw, root.state.legal_actions()).cpu()
   root.value_estimate = value
   root.probs = action_probs[0]
   # root.requires_eval = False
@@ -159,11 +166,13 @@ def mcts(model: ResNet, root: StateNode, sims=64):
         #backprop
       # pending_backups.append(history)
     if pending_evals:
-      input_batch = [board_to_input(pos[0].board, pos[0].turn) for pos in pending_evals]
+      # input_batch = [board_to_input(pos[0].board, pos[0].turn) for pos in pending_evals]
+      input_batch = [board_to_input(pos[0].state) for pos in pending_evals]
       input_batch = torch.cat(input_batch, dim=0).to(DEVICE)
       (pol_batch, val_batch) = model(input_batch)
       for i in range(input_batch.shape[0]):
-        action_probs = mask_and_softmax(pol_batch[i].unsqueeze(0), pending_evals[i][0].state, pending_evals[i][1]).cpu()
+        # action_probs = mask_and_softmax(pol_batch[i].unsqueeze(0), pending_evals[i][0].state, pending_evals[i][1]).cpu()
+        action_probs = mask_and_softmax(pol_batch[i].unsqueeze(0), pending_evals[i][1]).cpu()
         value = val_batch[i].item()
         pending_evals[i][0].probs = action_probs[0]
         pending_evals[i][0].value_estimate = value
