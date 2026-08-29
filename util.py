@@ -27,7 +27,7 @@ def board_to_input(board, turn):
     for col in range(8):
       if board[row][col] == 'o':
         res[0][row][col] = 1
-      elif board[row][col] == 'O': #TODO double check this and the other king
+      elif board[row][col] == '8':
         res[1][row][col] = 1
       elif board[row][col] == '+':
         res[2][row][col] = 1

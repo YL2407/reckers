@@ -21,6 +21,16 @@ replay_buffer = [] #TODO probably convert batches to tensors when retrieving
 def det_select_mcts_action(root):
   return torch.argmax(root.visit_counts).item()
 
+def tuned_select_mcts_action(root, determinism = 1.0, diff_thresh = 0.3):
+  counts = root.visit_counts.flatten()
+  probs = counts / counts.sum()
+  probs = torch.pow(probs, determinism)
+  probs = probs / probs.sum()
+  chosen_idx = torch.multinomial(probs, 1).item()
+  if torch.abs(root.qs[output_to_tuple(torch.argmax(counts).item())]) > torch.abs(root.qs[output_to_tuple(chosen_idx)]) + diff_thresh:
+    return tuned_select_mcts_action(root, determinism+0.5)
+  return chosen_idx
+
 def select_mcts_action(root):
   counts = root.visit_counts.flatten()
   probs = counts / counts.sum()
