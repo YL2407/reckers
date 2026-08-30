@@ -62,6 +62,8 @@ def populate_replay_buffer(game, model):
 
 def training_loop():
   model = ResNet().to(DEVICE)
+  checkpoint = torch.load("weights/checkpoint_40_old.pth", map_location=torch.device(DEVICE))
+  model.load_state_dict(checkpoint["model"])
   game = pyspiel.load_game("checkers")
   #TODO save weights from time to time, print iteration
   optim = torch.optim.AdamW(model.parameters())
