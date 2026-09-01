@@ -10,13 +10,10 @@ import time
 GAMES_TO_SIM = 50
 BATCH_SIZE = 32
 MAX_TRAIN_ITERS = 1000
-BUFFER_SIZE = 500000 #TODO decide on this
+BUFFER_SIZE = 500000
 TRAIN_LOOP_ITERS = 4000
 
-
-# class BufferItem():
-#   def __init__(self, ):
-replay_buffer = [] #TODO probably convert batches to tensors when retrieving    
+replay_buffer = []  
 
 def det_select_mcts_action(root):
   return torch.argmax(root.visit_counts).item()
@@ -47,11 +44,9 @@ def self_play_game(game, model):
       # t2 = time.time()
       # print(f"{64/(t2 - t1)} sims per second")
     game_state_array.append(encode_node(root))
-    #TODO add this to replay buffer (probably)
     chosen_idx = select_mcts_action(root)
     action = state.string_to_action(output_to_move(root.board, chosen_idx))
     state = state.child(action)
-  #TODO probably add final state as well so we see returns and all?
   final_outcome = state.returns()[0]
   for game_state in game_state_array:
     replay_buffer.append((game_state, final_outcome))
@@ -62,14 +57,16 @@ def populate_replay_buffer(game, model):
 
 def training_loop():
   model = ResNet().to(DEVICE)
-  checkpoint = torch.load("weights/checkpoint_40_old.pth", map_location=torch.device(DEVICE))
-  model.load_state_dict(checkpoint["model"])
   game = pyspiel.load_game("checkers")
   #TODO save weights from time to time, print iteration
   optim = torch.optim.AdamW(model.parameters())
   loss_fn_val = torch.nn.MSELoss()
   loss_fn_pol = torch.nn.CrossEntropyLoss()
-  for train_loop_iter in range(TRAIN_LOOP_ITERS):
+  checkpoint = torch.load("weights/checkpoint_120.pth", map_location=torch.device(DEVICE), weights_only=False)
+  model.load_state_dict(checkpoint["model"])
+  optim.load_state_dict(checkpoint["optimizer"])
+  replay_buffer = checkpoint["buffer"]
+  for train_loop_iter in range(checkpoint["iteration"]+1, TRAIN_LOOP_ITERS):
     print(f"train loop iteration: {train_loop_iter}")
     # model = model.to('cpu')
     model.eval()
@@ -117,6 +114,7 @@ def training_loop():
         "model": model.state_dict(),
         "optimizer": optim.state_dict(),
         "iteration": train_loop_iter,
+        "buffer": replay_buffer
       }, f"weights/checkpoint_{train_loop_iter+1}.pth")
 
 

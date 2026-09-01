@@ -26,9 +26,17 @@ if __name__ == "__main__":
   model2 = ResNet()
   assert len(sys.argv) == 3, "provide 2 checkpoint file names as arguments"
   _, file1, file2 = sys.argv
-  checkpoint1 = torch.load(file1, map_location=torch.device(DEVICE))
-  checkpoint2 = torch.load(file2, map_location=torch.device(DEVICE))
-  model1.load_state_dict(checkpoint1["model"])
+  checkpoint1 = torch.load(file1, map_location=torch.device(DEVICE), weights_only=False)
+  checkpoint2 = torch.load(file2, map_location=torch.device(DEVICE), weights_only=False)
+  if isinstance(checkpoint1, dict) and "model" in checkpoint1:
+    weights1 = checkpoint1["model"]
+  else:
+    weights1 = checkpoint1
+  if isinstance(checkpoint2, dict) and "model" in checkpoint2:
+    weights2 = checkpoint2["model"]
+  else:
+    weights2 = checkpoint2
+  model1.load_state_dict(weights1)
   model1.eval()
   model2.load_state_dict(checkpoint2["model"])
   model2.eval()
@@ -44,7 +52,8 @@ if __name__ == "__main__":
           # chosen_idx = det_select_mcts_action(root)
         else:
           root = sequential_mcts(model2, root)
-      chosen_idx = select_mcts_action(root)
+      # chosen_idx = tuned_select_mcts_action(root)
+      chosen_idx = tuned_select_mcts_action(root)
       action = state.string_to_action(output_to_move(root.board, chosen_idx))
       state.apply_action(action)
     final_outcome = state.returns()[0]

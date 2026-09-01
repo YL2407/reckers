@@ -1,7 +1,7 @@
 import sys
 from mcts import StateNode, sequential_mcts
 from resnet import ResNet
-from train import det_select_mcts_action, select_mcts_action
+from train import det_select_mcts_action, select_mcts_action, tuned_select_mcts_action
 from util import *
 import pyspiel
 import pygame
@@ -64,14 +64,15 @@ def game_loop(model, game):
     pygame.draw.rect(screen, 'black', pygame.Rect(board_size[0], 0, 720-board_size[0], (1-val)*640))
     pygame.draw.rect(screen, 'white', pygame.Rect(board_size[0], (1-val)*640, 640, val*640))
     if not state.is_terminal():
-      if state.current_player() == 1:
+      if state.current_player() == 0:
         (_, val_pred) = model(board_to_input(state))
         val = (val_pred[0].item() + 1)/2
         root = StateNode(state)
         with torch.no_grad():
-          root = sequential_mcts(model, root)
+          root = sequential_mcts(model, root, sims=200)
         # chosen_idx = select_mcts_action(root)
         chosen_idx = det_select_mcts_action(root)
+        # chosen_idx = tuned_select_mcts_action(root)
         action = state.string_to_action(output_to_move(root.board, chosen_idx))
         state.apply_action(action)
       else:
@@ -93,7 +94,7 @@ def game_loop(model, game):
             clicked = False
             piece = board[int(click_pos[1])//int(sq_h)][int(click_pos[0])//int(sq_w)]
             # print(piece)
-            if piece == 'o' or piece == '8':
+            if piece == '+' or piece == '*':
               piece_selected = True
               piece_pos = (click_pos[1]//int(sq_h), click_pos[0]//int(sq_w))
     else:
@@ -104,11 +105,15 @@ def game_loop(model, game):
     clock.tick(60)
 
 if __name__ == "__main__":
-  weight_path = "weights/checkpoint_20.pth"
+  weight_path = "weights/checkpoint_100.pth"
   if len(sys.argv) == 2:
     weight_path = sys.argv[1]
   model = ResNet()#.to(DEVICE)
-  checkpoint = torch.load(weight_path, map_location=torch.device(DEVICE))
-  model.load_state_dict(checkpoint["model"])
+  checkpoint = torch.load(weight_path, map_location=torch.device(DEVICE), weights_only=False)
+  if isinstance(checkpoint, dict) and "model" in checkpoint:
+    weights = checkpoint["model"]
+  else:
+    weights = checkpoint
+  model.load_state_dict(weights)
   game = pyspiel.load_game("checkers")
   game_loop(model, game)

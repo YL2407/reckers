@@ -147,6 +147,8 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+weights/checkpoint_160.pth
+
 # Environments
 .env
 .envrc
